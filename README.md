@@ -13,6 +13,9 @@ Real-time ICMP (ping) monitoring dashboard for Windows with live statistics and 
 - 🎨 Color-coded output for easy status identification
 - ⏱️ Timestamp for each ping result
 - 📈 Continuous monitoring until stopped
+- 📋 **Lost ping tracking**: After stopping (Ctrl+C), displays a detailed summary of lost ping periods with timestamps
+  - Groups consecutive lost pings together (e.g., "5 lost pings from 2025-11-06 15:06:09 to 15:06:13")
+  - Shows individual timestamps for isolated packet losses
 
 ## Versions
 
@@ -124,7 +127,33 @@ To change the target, edit the `TARGET` variable at the beginning of the batch f
 
 ## Stopping the Dashboard
 
-Press **Ctrl+C** to stop the monitoring. The dashboard will display final statistics before exiting.
+Press **Ctrl+C** to stop the monitoring. The dashboard will display final statistics before exiting, including a summary of any lost pings.
+
+### Example Final Statistics Output (PowerShell)
+
+```
+Dashboard stopped.
+
+Final Statistics:
+  Total Pings: 150
+  Successful: 145
+  Failed: 5
+  Packet Loss: 3.33%
+  Avg Response Time: 23.45ms
+  Min Response Time: 18ms
+  Max Response Time: 156ms
+
+Lost Ping Periods:
+  2 lost pings from 2025-11-06 15:06:09 to 15:06:10
+  1 lost ping at 2025-11-06 15:08:45
+  2 lost pings from 2025-11-06 15:12:30 to 15:12:31
+```
+
+This feature helps you identify exactly when connection issues occurred, making it easier to:
+- Correlate network issues with specific events
+- Identify patterns in packet loss
+- Document network outages with precise timestamps
+- Troubleshoot intermittent connectivity problems
 
 ## Troubleshooting
 

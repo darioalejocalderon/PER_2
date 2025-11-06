@@ -226,6 +226,42 @@ function Perform-Ping {
     }
 }
 
+function Get-LostPingSummary {
+    # Group consecutive failed pings together
+    $lostPingGroups = @()
+    $currentGroup = $null
+
+    foreach ($result in $script:PingResults) {
+        if (-not $result.Success) {
+            if ($null -eq $currentGroup) {
+                # Start new group
+                $currentGroup = @{
+                    StartTime = $result.Timestamp
+                    EndTime = $result.Timestamp
+                    Count = 1
+                }
+            } else {
+                # Continue existing group
+                $currentGroup.EndTime = $result.Timestamp
+                $currentGroup.Count++
+            }
+        } else {
+            # Success ping - close current group if exists
+            if ($null -ne $currentGroup) {
+                $lostPingGroups += $currentGroup
+                $currentGroup = $null
+            }
+        }
+    }
+
+    # Don't forget the last group if it exists
+    if ($null -ne $currentGroup) {
+        $lostPingGroups += $currentGroup
+    }
+
+    return $lostPingGroups
+}
+
 function Update-Dashboard {
     Draw-Header
 
@@ -285,6 +321,33 @@ try {
         Write-Host "  Avg Response Time: ${finalAvg}ms" -ForegroundColor $Colors.Success
         Write-Host "  Min Response Time: ${finalMin}ms" -ForegroundColor $Colors.Success
         Write-Host "  Max Response Time: $($script:MaxResponseTime)ms" -ForegroundColor $Colors.Success
+    }
+
+    # Display lost ping summary if there were any failures
+    if ($script:FailedPings -gt 0) {
+        $lostPingGroups = Get-LostPingSummary
+
+        if ($lostPingGroups.Count -gt 0) {
+            Write-Host "`nLost Ping Periods:" -ForegroundColor $Colors.Header
+
+            foreach ($group in $lostPingGroups) {
+                $startTime = $group.StartTime.ToString("yyyy-MM-dd HH:mm:ss")
+                $endTime = $group.EndTime.ToString("HH:mm:ss")
+                $count = $group.Count
+
+                if ($count -eq 1) {
+                    Write-Host "  1 lost ping at $startTime" -ForegroundColor $Colors.Error
+                } else {
+                    # Check if same date
+                    if ($group.StartTime.Date -eq $group.EndTime.Date) {
+                        Write-Host "  $count lost pings from $startTime to $endTime" -ForegroundColor $Colors.Error
+                    } else {
+                        $endTimeWithDate = $group.EndTime.ToString("yyyy-MM-dd HH:mm:ss")
+                        Write-Host "  $count lost pings from $startTime to $endTimeWithDate" -ForegroundColor $Colors.Error
+                    }
+                }
+            }
+        }
     }
 
     Write-Host ""
