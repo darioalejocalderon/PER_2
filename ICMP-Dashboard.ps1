@@ -47,6 +47,10 @@ function Draw-Header {
     $padding = [math]::Max(0, ($width - $title.Length) / 2)
     Write-Host (" " * $padding + $title) -ForegroundColor $Colors.Header -NoNewline
     [Console]::SetCursorPosition(0, 2)
+    $subtitle = " For Private Use Only "
+    $subPadding = [math]::Max(0, ($width - $subtitle.Length) / 2)
+    Write-Host (" " * $subPadding + $subtitle) -ForegroundColor $Colors.Warning -NoNewline
+    [Console]::SetCursorPosition(0, 3)
     Write-Host ("=" * $width) -ForegroundColor $Colors.Header -NoNewline
 }
 
@@ -265,7 +269,7 @@ function Get-LostPingSummary {
 function Update-Dashboard {
     Draw-Header
 
-    $headerRows = 3
+    $headerRows = 4
     $statsStartRow = $headerRows + 1
     $resultsStartRow = $headerRows + 1
     $maxResultRows = [Console]::WindowHeight - $headerRows - 3

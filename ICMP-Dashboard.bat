@@ -21,6 +21,7 @@ echo. > "%TEMP_LOST_PINGS%"
 cls
 echo ================================================================================
 echo                   ICMP DASHBOARD - Monitoring: %TARGET%
+echo                        For Private Use Only
 echo ================================================================================
 echo.
 echo Initializing dashboard...
@@ -32,6 +33,7 @@ goto MAIN
 cls
 echo ================================================================================
 echo                   ICMP DASHBOARD - Monitoring: %TARGET%
+echo                        For Private Use Only
 echo ================================================================================
 echo.
 echo [STATISTICS]                          [PING RESULTS]
