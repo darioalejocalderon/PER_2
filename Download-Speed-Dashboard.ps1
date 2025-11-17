@@ -43,6 +43,8 @@ $script:IsDownloading = $false
 $script:CurrentSpeed = 0
 $script:AverageSpeed = 0
 $script:PeakSpeed = 0
+$script:lastBytes = 0
+$script:lastTime = Get-Date
 
 # Color scheme
 $Colors = @{
@@ -330,17 +332,18 @@ function Update-DownloadTestDashboard {
 function Start-DownloadSpeedTest {
     $script:DownloadStartTime = Get-Date
     $script:IsDownloading = $true
+    $script:lastBytes = 0
+    $script:lastTime = Get-Date
 
     # Create a temporary file
     $tempFile = [System.IO.Path]::GetTempFileName()
 
     try {
+        # Enable TLS 1.2 for HTTPS downloads
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
         # Create web client for download
         $webClient = New-Object System.Net.WebClient
-
-        # Variables for speed calculation
-        $lastBytes = 0
-        $lastTime = Get-Date
 
         # Register event for download progress
         $progressHandler = Register-ObjectEvent -InputObject $webClient -EventName DownloadProgressChanged -Action {
@@ -366,6 +369,9 @@ function Start-DownloadSpeedTest {
         # Start async download
         $webClient.DownloadFileAsync($DownloadURL, $tempFile)
 
+        # Wait a moment for download to start
+        Start-Sleep -Milliseconds 500
+
         # Monitor download for specified duration
         $startTime = Get-Date
         while (((Get-Date) - $startTime).TotalSeconds -lt $TestDuration -and $script:IsDownloading) {
@@ -381,17 +387,23 @@ function Start-DownloadSpeedTest {
         # Stop download
         if ($webClient.IsBusy) {
             $webClient.CancelAsync()
+            Start-Sleep -Milliseconds 500
         }
 
         $script:DownloadEndTime = Get-Date
 
         # Unregister event
-        Unregister-Event -SourceIdentifier $progressHandler.Name
-        Remove-Job -Id $progressHandler.Id -Force
+        if ($progressHandler) {
+            Unregister-Event -SourceIdentifier $progressHandler.Name -ErrorAction SilentlyContinue
+            Remove-Job -Id $progressHandler.Id -Force -ErrorAction SilentlyContinue
+        }
 
         # Cleanup
         $webClient.Dispose()
 
+    } catch {
+        Write-Host "`nDownload Error: $($_.Exception.Message)" -ForegroundColor Red
+        $script:DownloadEndTime = Get-Date
     } finally {
         # Remove temp file
         if (Test-Path $tempFile) {
