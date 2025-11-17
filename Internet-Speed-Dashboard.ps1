@@ -381,54 +381,108 @@ try {
         Start-Speedtest
         Update-SpeedtestDashboard
 
-        # Show results for a moment
-        Start-Sleep -Seconds 5
+        # Show results briefly
+        Start-Sleep -Seconds 3
     }
 
-} catch {
-    if ($_.Exception.Message -notmatch "pipeline") {
-        Write-Host "`nError: $($_.Exception.Message)" -ForegroundColor Red
-    }
-} finally {
-    # Cleanup
+    # Clear screen before showing final summary
+    Clear-Host
     [Console]::CursorVisible = $true
-    [Console]::SetCursorPosition(0, [Console]::WindowHeight - 1)
-    Write-Host "`n`nDashboard stopped." -ForegroundColor $Colors.Info
 
-    # Display final statistics
-    Write-Host "`n=== WEBSITE LOAD TIME RESULTS ===" -ForegroundColor $Colors.Header
+    # Display final summary
+    Write-Host ""
+    Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor $Colors.Header
+    Write-Host "║          INTERNET SPEED DASHBOARD - FINAL RESULTS             ║" -ForegroundColor $Colors.Header
+    Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor $Colors.Header
+    Write-Host ""
+
+    # Website Load Time Results
+    Write-Host "┌─ WEBSITE LOAD TIME RESULTS ─────────────────────────────────┐" -ForegroundColor $Colors.Header
 
     $successCount = ($script:WebsiteResults | Where-Object { $_.Success }).Count
     $failCount = ($script:WebsiteResults | Where-Object { -not $_.Success }).Count
 
     foreach ($result in $script:WebsiteResults) {
         if ($result.Success) {
-            Write-Host "  $($result.Website.PadRight(30)) - $($result.LoadTime)ms" -ForegroundColor $Colors.Success
+            $loadTimeColor = if ($result.LoadTime -lt 500) { $Colors.Success }
+                           elseif ($result.LoadTime -lt 2000) { $Colors.Warning }
+                           else { $Colors.Error }
+            Write-Host "│  $($result.Website.PadRight(32)) $($result.LoadTime.ToString().PadLeft(6))ms" -ForegroundColor $loadTimeColor
         } else {
-            Write-Host "  $($result.Website.PadRight(30)) - FAILED" -ForegroundColor $Colors.Error
+            Write-Host "│  $($result.Website.PadRight(32)) FAILED" -ForegroundColor $Colors.Error
         }
     }
 
-    Write-Host "`n  Success: $successCount / $($script:WebsiteResults.Count)" -ForegroundColor $(if ($successCount -eq $script:WebsiteResults.Count) { $Colors.Success } else { $Colors.Warning })
+    Write-Host "├──────────────────────────────────────────────────────────────┤" -ForegroundColor $Colors.Header
+    Write-Host "│  Success Rate: $successCount / $($script:WebsiteResults.Count)".PadRight(63) + "│" -ForegroundColor $(if ($successCount -eq $script:WebsiteResults.Count) { $Colors.Success } else { $Colors.Warning })
 
     if ($successCount -gt 0) {
         $avgLoadTime = ($script:WebsiteResults | Where-Object { $_.Success } | Measure-Object -Property LoadTime -Average).Average
-        Write-Host "  Average Load Time: $([math]::Round($avgLoadTime, 2))ms" -ForegroundColor $Colors.Info
+        Write-Host "│  Average Load Time: $([math]::Round($avgLoadTime, 2))ms".PadRight(63) + "│" -ForegroundColor $Colors.Info
     }
+
+    Write-Host "└──────────────────────────────────────────────────────────────┘" -ForegroundColor $Colors.Header
+    Write-Host ""
 
     # Display speedtest results
     if (-not $SkipSpeedtest -and $null -ne $script:SpeedtestResult) {
-        Write-Host "`n=== INTERNET SPEED TEST RESULTS ===" -ForegroundColor $Colors.Header
-        Write-Host "  Server: $($script:SpeedtestResult.ServerName)" -ForegroundColor $Colors.Info
-        Write-Host "  Location: $($script:SpeedtestResult.ServerLocation)" -ForegroundColor $Colors.Label
-        Write-Host "  Ping: $($script:SpeedtestResult.Ping) ms" -ForegroundColor $Colors.Success
-        Write-Host "  Download: $(Format-Speed $script:SpeedtestResult.DownloadSpeed)" -ForegroundColor $Colors.Success
-        Write-Host "  Upload: $(Format-Speed $script:SpeedtestResult.UploadSpeed)" -ForegroundColor $Colors.Warning
+        Write-Host "┌─ INTERNET SPEED TEST RESULTS ───────────────────────────────┐" -ForegroundColor $Colors.Header
+        Write-Host "│" -ForegroundColor $Colors.Header -NoNewline
+        Write-Host "  Server: $($script:SpeedtestResult.ServerName)".PadRight(62) -ForegroundColor $Colors.Info -NoNewline
+        Write-Host "│" -ForegroundColor $Colors.Header
+
+        Write-Host "│" -ForegroundColor $Colors.Header -NoNewline
+        Write-Host "  Location: $($script:SpeedtestResult.ServerLocation)".PadRight(62) -ForegroundColor $Colors.Label -NoNewline
+        Write-Host "│" -ForegroundColor $Colors.Header
+
+        Write-Host "├──────────────────────────────────────────────────────────────┤" -ForegroundColor $Colors.Header
+
+        Write-Host "│" -ForegroundColor $Colors.Header -NoNewline
+        Write-Host "  Ping: $($script:SpeedtestResult.Ping) ms".PadRight(62) -ForegroundColor $Colors.Success -NoNewline
+        Write-Host "│" -ForegroundColor $Colors.Header
+
+        Write-Host "│" -ForegroundColor $Colors.Header -NoNewline
+        Write-Host "  Jitter: $($script:SpeedtestResult.Jitter) ms".PadRight(62) -ForegroundColor $Colors.Label -NoNewline
+        Write-Host "│" -ForegroundColor $Colors.Header
+
+        Write-Host "├──────────────────────────────────────────────────────────────┤" -ForegroundColor $Colors.Header
+
+        Write-Host "│" -ForegroundColor $Colors.Header -NoNewline
+        Write-Host "  Download Speed: $(Format-Speed $script:SpeedtestResult.DownloadSpeed)".PadRight(62) -ForegroundColor $Colors.Success -NoNewline
+        Write-Host "│" -ForegroundColor $Colors.Header
+
+        Write-Host "│" -ForegroundColor $Colors.Header -NoNewline
+        Write-Host "  Upload Speed: $(Format-Speed $script:SpeedtestResult.UploadSpeed)".PadRight(62) -ForegroundColor $Colors.Warning -NoNewline
+        Write-Host "│" -ForegroundColor $Colors.Header
 
         if ($script:SpeedtestResult.ResultUrl -notmatch "failed") {
-            Write-Host "`n  Results: $($script:SpeedtestResult.ResultUrl)" -ForegroundColor $Colors.Label
+            Write-Host "├──────────────────────────────────────────────────────────────┤" -ForegroundColor $Colors.Header
+            Write-Host "│" -ForegroundColor $Colors.Header -NoNewline
+
+            $urlLabel = "  View Results: "
+            $maxUrlLength = 62 - $urlLabel.Length
+            $displayUrl = if ($script:SpeedtestResult.ResultUrl.Length -gt $maxUrlLength) {
+                $script:SpeedtestResult.ResultUrl.Substring(0, $maxUrlLength - 3) + "..."
+            } else {
+                $script:SpeedtestResult.ResultUrl
+            }
+            Write-Host ($urlLabel + $displayUrl).PadRight(62) -ForegroundColor $Colors.Label -NoNewline
+            Write-Host "│" -ForegroundColor $Colors.Header
         }
+
+        Write-Host "└──────────────────────────────────────────────────────────────┘" -ForegroundColor $Colors.Header
+        Write-Host ""
     }
 
+} catch {
+    # Clear screen and show error
+    Clear-Host
+    [Console]::CursorVisible = $true
+    Write-Host ""
+    Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host ""
+} finally {
+    # Ensure cursor is visible
+    [Console]::CursorVisible = $true
     Write-Host ""
 }
