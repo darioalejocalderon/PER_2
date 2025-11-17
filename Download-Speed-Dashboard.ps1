@@ -334,6 +334,8 @@ function Start-DownloadSpeedTest {
     $script:IsDownloading = $true
     $script:lastBytes = 0
     $script:lastTime = Get-Date
+    $script:TotalBytesDownloaded = 0
+    $script:CurrentSpeed = 0
 
     # Create a temporary file
     $tempFile = [System.IO.Path]::GetTempFileName()
@@ -342,68 +344,95 @@ function Start-DownloadSpeedTest {
         # Enable TLS 1.2 for HTTPS downloads
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-        # Create web client for download
-        $webClient = New-Object System.Net.WebClient
+        # Create HTTP request
+        $request = [System.Net.HttpWebRequest]::Create($DownloadURL)
+        $request.Method = "GET"
+        $request.Timeout = 120000  # 2 minutes timeout
 
-        # Register event for download progress
-        $progressHandler = Register-ObjectEvent -InputObject $webClient -EventName DownloadProgressChanged -Action {
-            $script:TotalBytesDownloaded = $EventArgs.BytesReceived
+        # Get response
+        $response = $request.GetResponse()
+        $responseStream = $response.GetResponseStream()
+        $fileStream = [System.IO.File]::Create($tempFile)
 
-            # Calculate current speed
-            $now = Get-Date
-            $timeDiff = ($now - $script:lastTime).TotalSeconds
+        # Buffer for reading chunks
+        $buffer = New-Object byte[] 65536  # 64KB buffer
+        $startTime = Get-Date
+        $lastDashboardUpdate = Get-Date
 
-            if ($timeDiff -ge 0.5) {  # Update speed every 0.5 seconds
-                $bytesDiff = $script:TotalBytesDownloaded - $script:lastBytes
-                $script:CurrentSpeed = $bytesDiff / $timeDiff
+        # Download loop - runs for exactly the specified duration
+        while (((Get-Date) - $startTime).TotalSeconds -lt $TestDuration) {
+            try {
+                # Read chunk from stream
+                $bytesRead = $responseStream.Read($buffer, 0, $buffer.Length)
 
-                if ($script:CurrentSpeed -gt $script:PeakSpeed) {
-                    $script:PeakSpeed = $script:CurrentSpeed
+                if ($bytesRead -eq 0) {
+                    # End of file reached, but continue timing
+                    Start-Sleep -Milliseconds 100
+
+                    # Still update dashboard
+                    $now = Get-Date
+                    if (($now - $lastDashboardUpdate).TotalMilliseconds -ge 500) {
+                        Update-DownloadTestDashboard
+                        $lastDashboardUpdate = $now
+                    }
+                    continue
                 }
 
-                $script:lastBytes = $script:TotalBytesDownloaded
-                $script:lastTime = $now
+                # Write to file
+                $fileStream.Write($buffer, 0, $bytesRead)
+                $script:TotalBytesDownloaded += $bytesRead
+
+                # Calculate current speed
+                $now = Get-Date
+                $timeDiff = ($now - $script:lastTime).TotalSeconds
+
+                if ($timeDiff -ge 0.5) {  # Update speed every 0.5 seconds
+                    $bytesDiff = $script:TotalBytesDownloaded - $script:lastBytes
+                    $script:CurrentSpeed = $bytesDiff / $timeDiff
+
+                    if ($script:CurrentSpeed -gt $script:PeakSpeed) {
+                        $script:PeakSpeed = $script:CurrentSpeed
+                    }
+
+                    $script:lastBytes = $script:TotalBytesDownloaded
+                    $script:lastTime = $now
+                }
+
+                # Update dashboard every 500ms
+                if (($now - $lastDashboardUpdate).TotalMilliseconds -ge 500) {
+                    Update-DownloadTestDashboard
+                    $lastDashboardUpdate = $now
+                }
+
+            } catch {
+                # If read fails, just continue timing
+                Start-Sleep -Milliseconds 100
+
+                # Still update dashboard
+                $now = Get-Date
+                if (($now - $lastDashboardUpdate).TotalMilliseconds -ge 500) {
+                    Update-DownloadTestDashboard
+                    $lastDashboardUpdate = $now
+                }
             }
-        }
-
-        # Start async download
-        $webClient.DownloadFileAsync($DownloadURL, $tempFile)
-
-        # Wait a moment for download to start
-        Start-Sleep -Milliseconds 500
-
-        # Monitor download for specified duration
-        $startTime = Get-Date
-        while (((Get-Date) - $startTime).TotalSeconds -lt $TestDuration -and $script:IsDownloading) {
-            Update-DownloadTestDashboard
-            Start-Sleep -Milliseconds 500
-
-            # Check if download completed
-            if (-not $webClient.IsBusy) {
-                break
-            }
-        }
-
-        # Stop download
-        if ($webClient.IsBusy) {
-            $webClient.CancelAsync()
-            Start-Sleep -Milliseconds 500
         }
 
         $script:DownloadEndTime = Get-Date
 
-        # Unregister event
-        if ($progressHandler) {
-            Unregister-Event -SourceIdentifier $progressHandler.Name -ErrorAction SilentlyContinue
-            Remove-Job -Id $progressHandler.Id -Force -ErrorAction SilentlyContinue
-        }
-
-        # Cleanup
-        $webClient.Dispose()
+        # Close streams
+        $fileStream.Close()
+        $responseStream.Close()
+        $response.Close()
 
     } catch {
-        Write-Host "`nDownload Error: $($_.Exception.Message)" -ForegroundColor Red
         $script:DownloadEndTime = Get-Date
+
+        # Display error at bottom of screen
+        $errorRow = [Console]::WindowHeight - 2
+        [Console]::SetCursorPosition(0, $errorRow)
+        Write-Host " Error: $($_.Exception.Message)".PadRight([Console]::WindowWidth) -ForegroundColor Red
+
+        Start-Sleep -Seconds 2
     } finally {
         # Remove temp file
         if (Test-Path $tempFile) {
@@ -424,9 +453,9 @@ try {
 
     # Phase 1: Website Load Time Testing
     $script:CurrentPhase = "website-test"
+    Update-WebsiteTestDashboard
 
     foreach ($website in $Websites) {
-        Write-Host "Testing $website..." -ForegroundColor $Colors.Info
         $result = Test-WebsiteLoadTime -Website $website
         $script:WebsiteResults += $result
         Update-WebsiteTestDashboard
@@ -437,10 +466,14 @@ try {
     Start-Sleep -Seconds 3
 
     # Phase 2: Download Speed Testing
-    Write-Host "`nStarting download speed test..." -ForegroundColor $Colors.Info
-    Write-Host "Duration: $TestDuration seconds" -ForegroundColor $Colors.Info
-    Write-Host "URL: $DownloadURL" -ForegroundColor $Colors.Info
-    Start-Sleep -Seconds 2
+    Clear-Host
+    Write-Host "`n`n" -NoNewline
+    Write-Host "  Phase 1 Complete: Website load times tested" -ForegroundColor $Colors.Success
+    Write-Host "`n  Starting Phase 2: Download speed test..." -ForegroundColor $Colors.Info
+    Write-Host "  Duration: $TestDuration seconds" -ForegroundColor $Colors.Label
+    Write-Host "  URL: $DownloadURL" -ForegroundColor $Colors.Label
+    Write-Host "`n  Starting download in 3 seconds..." -ForegroundColor $Colors.Warning
+    Start-Sleep -Seconds 3
 
     Clear-Host
     $script:CurrentPhase = "download-test"
