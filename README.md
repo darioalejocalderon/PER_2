@@ -204,6 +204,59 @@ If the target is consistently unreachable:
 
 This project is open source and available for personal and commercial use.
 
+---
+
+# Music Steganography and Cryptography System
+
+A comprehensive Python system for hiding secret messages in sheet music using MusicXML format. Combines steganography with musical cipher encryption.
+
+## Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Generate example files
+python examples/generate_examples.py
+
+# Encode a message
+python -m music_steg.cli encode -i examples/twinkle_twinkle.musicxml -m "Secret!" -o encoded.musicxml
+
+# Decode a message
+python -m music_steg.cli decode -i encoded.musicxml --try-all
+
+# Run comprehensive demo
+python demo.py
+```
+
+## Features
+
+- **Steganography**: Hide messages using dynamic markings, stem directions, articulations, and ornaments
+- **Musical Cipher**: Use music as an encryption key
+- **Visualization**: Compare before/after sheet music
+- **Analysis**: Capacity estimation and technique detection
+
+## Documentation
+
+- 📖 **Full Documentation**: See [MUSIC_STEG_README.md](MUSIC_STEG_README.md)
+- 📚 **User Guide**: See [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- 🎬 **Demo**: Run `python demo.py` for a complete demonstration
+
+## Example Usage
+
+```bash
+# Analyze capacity
+python -m music_steg.cli analyze -i examples/longer_piece.musicxml
+
+# Encode with specific techniques
+python -m music_steg.cli encode -i input.musicxml -m "Message" -o output.musicxml -t dynamics,stem
+
+# Encrypt with musical cipher
+python -m music_steg.cli cipher -k examples/jazz_key.musicxml -m "Secret" --mode encrypt
+```
+
+---
+
 ## Contributing
 
 Feel free to submit issues, fork the repository, and create pull requests for any improvements.
